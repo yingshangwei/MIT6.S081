@@ -229,6 +229,7 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  p->tracemask = 0;
 
   release(&p->lock);
 }
@@ -294,6 +295,8 @@ fork(void)
   pid = np->pid;
 
   np->state = RUNNABLE;
+
+  np->tracemask = p->tracemask;
 
   release(&np->lock);
 
@@ -692,4 +695,15 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int
+trace(int mask)
+{
+  //printf("trace %d\n", mask);
+  struct proc *p = myproc();
+  acquire(&p->lock);
+  p->tracemask = mask;
+  release(&p->lock);
+  return 0;
 }
