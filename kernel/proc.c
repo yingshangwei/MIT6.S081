@@ -697,6 +697,9 @@ procdump(void)
   }
 }
 
+// ysw
+// Set tracemask which in the struct pro to control syscall() function 
+// to print syscall infomation with marked syscall number
 int
 trace(int mask)
 {
@@ -706,4 +709,20 @@ trace(int mask)
   p->tracemask = mask;
   release(&p->lock);
   return 0;
+}
+
+
+uint64
+get_used_processes_count() {
+  uint64 cnt = 0;
+  struct proc *p;
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state != UNUSED) 
+      cnt++;
+    release(&p->lock);
+  }
+
+  return cnt;
 }
