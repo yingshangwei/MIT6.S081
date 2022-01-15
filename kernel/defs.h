@@ -8,6 +8,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct sysinfo;
 
 // bio.c
 void            binit(void);
@@ -63,6 +64,7 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
+uint64          get_freememory_count();           // ysw
 
 // log.c
 void            initlog(int, struct superblock*);
@@ -104,6 +106,8 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
+int             trace(int);                  //ysw
+uint64          get_used_processes_count();  //ysw
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -185,3 +189,8 @@ void            virtio_disk_intr(void);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
+
+// ysw
+// info.c
+int             sysinfo(struct sysinfo*);

@@ -229,6 +229,7 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  p->tracemask = 0;
 
   release(&p->lock);
 }
@@ -294,6 +295,8 @@ fork(void)
   pid = np->pid;
 
   np->state = RUNNABLE;
+
+  np->tracemask = p->tracemask;
 
   release(&np->lock);
 
@@ -692,4 +695,34 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+// ysw
+// Set tracemask which in the struct pro to control syscall() function 
+// to print syscall infomation with marked syscall number
+int
+trace(int mask)
+{
+  //printf("trace %d\n", mask);
+  struct proc *p = myproc();
+  acquire(&p->lock);
+  p->tracemask = mask;
+  release(&p->lock);
+  return 0;
+}
+
+
+uint64
+get_used_processes_count() {
+  uint64 cnt = 0;
+  struct proc *p;
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state != UNUSED) 
+      cnt++;
+    release(&p->lock);
+  }
+
+  return cnt;
 }
