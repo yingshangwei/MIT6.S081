@@ -41,7 +41,7 @@ procinit(void)
       kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
       p->kstack = va;
   }
-  kvminithart();
+  kvminithart(); // ysw 注:  估摸着是在缓存清理
 }
 
 // Must be called with interrupts disabled,
