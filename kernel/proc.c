@@ -18,6 +18,7 @@ struct spinlock pid_lock;
 extern void forkret(void);
 static void wakeup1(struct proc *chan);
 static void freeproc(struct proc *p);
+void proc_freekernelpagetable(pagetable_t);
 
 extern char trampoline[]; // trampoline.S
 
@@ -31,15 +32,17 @@ procinit(void)
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
 
-      // Allocate a page for the process's kernel stack.
-      // Map it high in memory, followed by an invalid
-      // guard page.
-      char *pa = kalloc();
-      if(pa == 0)
-        panic("kalloc");
-      uint64 va = KSTACK((int) (p - proc));
-      kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-      p->kstack = va;
+      // ysw
+      // // Allocate a page for the process's kernel stack.
+      // // Map it high in memory, followed by an invalid
+      // // guard page.
+      // char *pa = kalloc(); 
+      // if(pa == 0)
+      //   panic("kalloc");
+      // uint64 va = KSTACK((int) (p - proc));
+
+      // kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+      // p->kstack = va;
   }
   kvminithart();
 }
@@ -120,12 +123,30 @@ found:
     release(&p->lock);
     return 0;
   }
-  p->kernel_pagetable = kvmcreate();
+
+  // ysw
+  p->kernel_pagetable = new_kernel_pagetable();
   if(p->kernel_pagetable == 0) {
     freeproc(p);
     release(&p->lock);
     return 0;
   }
+
+  // ysw
+  // Allocate a page for the process's kernel stack.
+  // Map it high in memory, followed by an invalid
+  // guard page.
+  char *pa = kalloc(); 
+  if(pa == 0) {
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  uint64 va = KSTACK(NPROC-1);
+  mappages(p->kernel_pagetable, va, PGSIZE, (uint64)pa, PTE_R | PTE_W);
+  p->kstack = va;
+
+
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -147,7 +168,7 @@ freeproc(struct proc *p)
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   if(p->pagetable) 
-    proc_freepagetable(p->kernel_pagetable, p->ksz);
+    proc_freekernelpagetable(p->kernel_pagetable);
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -200,6 +221,13 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
+}
+
+// ysw
+void
+proc_freekernelpagetable(pagetable_t kernel_pagetable) {
+  uvmunmap(kernel_pagetable,KSTACK(NPROC-1),1,1);
+  kvmfree(kernel_pagetable);
 }
 
 // a user program that calls exec("/init")
@@ -339,6 +367,7 @@ reparent(struct proc *p)
 void
 exit(int status)
 {
+  printf("exit\n");
   struct proc *p = myproc();
 
   if(p == initproc)
@@ -480,6 +509,11 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+
+        // ysw
+        kernel_pagetable = p->kernel_pagetable;
+        w_satp(MAKE_SATP(p->kernel_pagetable));
+        sfence_vma();
         swtch(&c->context, &p->context);
 
         // Process is done running for now.
@@ -511,6 +545,7 @@ scheduler(void)
 void
 sched(void)
 {
+  printf("sched");
   int intena;
   struct proc *p = myproc();
 
@@ -523,9 +558,18 @@ sched(void)
   if(intr_get())
     panic("sched interruptible");
 
+  printf("sched1");
   intena = mycpu()->intena;
+
+  kernel_pagetable = mycpu()->proc->kernel_pagetable; // ysw
+  w_satp(MAKE_SATP(mycpu()->proc->kernel_pagetable));
+  sfence_vma();
+  printf("sched2");
+  
   swtch(&p->context, &mycpu()->context);
+  printf("sched3");
   mycpu()->intena = intena;
+  printf("sched4");
 }
 
 // Give up the CPU for one scheduling round.
@@ -703,4 +747,10 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+// ysw
+pagetable_t
+myproc_pagetable() {
+  return myproc()->kernel_pagetable;
 }

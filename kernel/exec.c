@@ -12,6 +12,7 @@ static int loadseg(pde_t *pgdir, uint64 addr, struct inode *ip, uint offset, uin
 int
 exec(char *path, char **argv)
 {
+  printf("exec funtion : executing %s\n", path);
   char *s, *last;
   int i, off;
   uint64 argc, sz = 0, sp, ustack[MAXARG+1], stackbase;
@@ -117,9 +118,13 @@ exec(char *path, char **argv)
   proc_freepagetable(oldpagetable, oldsz);
 
   if(p->pid==1) vmprint(p->pagetable);
+  
+  //vmprint(p->kernel_pagetable);
+  printf("exec end\n");
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
  bad:
+  printf("exec bad\n");
   if(pagetable)
     proc_freepagetable(pagetable, sz);
   if(ip){

@@ -132,7 +132,7 @@ kvmpa(uint64 va)
   pte_t *pte;
   uint64 pa;
   
-  pte = walk(kernel_pagetable, va, 0);
+  pte = walk(myproc_pagetable(), va, 0);
   if(pte == 0)
     panic("kvmpa");
   if((*pte & PTE_V) == 0)
@@ -283,6 +283,7 @@ freewalk(pagetable_t pagetable)
       freewalk((pagetable_t)child);
       pagetable[i] = 0;
     } else if(pte & PTE_V){
+      printf("freewalk leaf : pa=%p\n", PTE2PA(pte));
       panic("freewalk: leaf");
     }
   }
@@ -471,34 +472,63 @@ vmprint(pagetable_t pagetable)
 
 // ysw
 pagetable_t 
-kvmcreate() 
+new_kernel_pagetable() 
 {
-  pagetable_t temp_kernel_pagetable = kernel_pagetable;
-  kernel_pagetable = (pagetable_t) kalloc();
+  pagetable_t temp_kernel_pagetable = (pagetable_t) kalloc();
+  if(temp_kernel_pagetable == 0)
+    return 0;
+
   memset(temp_kernel_pagetable, 0, PGSIZE);
 
+  int res = 0;
+
   // uart registers
-  kvmmap(UART0, UART0, PGSIZE, PTE_R | PTE_W);
+  res |= mappages(temp_kernel_pagetable, UART0, PGSIZE, UART0, PTE_R | PTE_W);
 
   // virtio mmio disk interface
-  kvmmap(VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+  res |= mappages(temp_kernel_pagetable, VIRTIO0, PGSIZE, VIRTIO0, PTE_R | PTE_W);
 
   // CLINT
-  kvmmap(CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+  res |= mappages(temp_kernel_pagetable, CLINT, 0x10000, CLINT, PTE_R | PTE_W);
 
   // PLIC
-  kvmmap(PLIC, PLIC, 0x400000, PTE_R | PTE_W);
+  res |= mappages(temp_kernel_pagetable, PLIC, 0x400000, PLIC, PTE_R | PTE_W);
 
   // map kernel text executable and read-only.
-  kvmmap(KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+  res |= mappages(temp_kernel_pagetable, KERNBASE, (uint64)etext-KERNBASE, KERNBASE, PTE_R | PTE_X);
 
   // map kernel data and the physical RAM we'll make use of.
-  kvmmap((uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
+  res |= mappages(temp_kernel_pagetable, (uint64)etext, PHYSTOP-(uint64)etext, (uint64)etext, PTE_R | PTE_W);
 
   // map the trampoline for trap entry/exit to
   // the highest virtual address in the kernel.
-  kvmmap(TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
-  pagetable_t temp = kernel_pagetable;
-  kernel_pagetable = temp_kernel_pagetable;
-  return temp;
+  res |= mappages(temp_kernel_pagetable, TRAMPOLINE, PGSIZE, (uint64)trampoline, PTE_R | PTE_X);
+
+  if(res != 0) {
+    printf("new_kernel_pagetable error!\n");
+  }
+  return temp_kernel_pagetable;
+}
+
+// ysw
+uint64 TONPAGES(uint64 va, uint64 sz) {
+  uint64 a = PGROUNDDOWN(va);
+  //printf("a %p\n", a);
+  uint64 b = PGROUNDDOWN(a+sz-1);
+  //printf("b %p\n", b);
+  //printf("val %p\n", b-a);
+  return (b-a)/PGSIZE + 1;
+} 
+// ysw
+void 
+kvmfree(pagetable_t kernel_pagetable) 
+{
+  uvmunmap(kernel_pagetable, PGROUNDDOWN(UART0), TONPAGES(UART0,PGSIZE), 0);
+  uvmunmap(kernel_pagetable, PGROUNDDOWN(VIRTIO0), TONPAGES(VIRTIO0,PGSIZE), 0);
+  uvmunmap(kernel_pagetable, PGROUNDDOWN(CLINT), TONPAGES(CLINT,0x10000), 0);
+  uvmunmap(kernel_pagetable, PGROUNDDOWN(PLIC), TONPAGES(PLIC,0x400000), 0);
+  uvmunmap(kernel_pagetable, PGROUNDDOWN(KERNBASE), TONPAGES(KERNBASE,(uint64)etext-KERNBASE), 0);
+  uvmunmap(kernel_pagetable, PGROUNDDOWN((uint64)etext), TONPAGES((uint64)etext,PHYSTOP-(uint64)etext), 0);
+  uvmunmap(kernel_pagetable, PGROUNDDOWN(TRAMPOLINE), TONPAGES(TRAMPOLINE,PGSIZE), 0);
+  freewalk(kernel_pagetable);
 }

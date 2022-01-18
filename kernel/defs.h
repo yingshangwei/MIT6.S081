@@ -8,6 +8,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+extern pagetable_t kernel_pagetable; // ysw
 #ifdef LAB_NET
 struct mbuf;
 struct sock;
@@ -108,6 +109,7 @@ void            yield(void);
 int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
+pagetable_t     myproc_pagetable(); // ysw
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -178,8 +180,9 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
-void            vmprint(pagetable_t pagetable); // ysw
-pagetable_t     kvmcreate();                    // ysw
+void            vmprint(pagetable_t pagetable);        // ysw
+pagetable_t     new_kernel_pagetable();                // ysw
+void            kvmfree(pagetable_t kernel_pagetable); // ysw 
 
 // plic.c
 void            plicinit(void);
