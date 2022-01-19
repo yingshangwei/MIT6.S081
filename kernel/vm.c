@@ -45,6 +45,16 @@ kvminit()
   // map the trampoline for trap entry/exit to
   // the highest virtual address in the kernel.
   kvmmap(TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+
+  char *pa = kalloc(); 
+  if(pa == 0) {
+    panic("alloc kernel stack error\n");
+  }
+  uint64 va = KSTACK(0);
+  if(mappages(kernel_pagetable, va, PGSIZE, (uint64)pa, PTE_R | PTE_W) != 0) 
+  {
+    panic("allocproc mappages");
+  }
 }
 
 // Switch h/w page table register to the kernel's page table,

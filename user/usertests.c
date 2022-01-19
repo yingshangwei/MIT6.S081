@@ -963,6 +963,7 @@ reparent2(char *s)
       fork();
       exit(0);
     }
+    //printf("wait i %d\n", i);
     wait(0);
   }
 
