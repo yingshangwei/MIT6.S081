@@ -8,7 +8,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
-extern pagetable_t kernel_pagetable; // ysw
+//extern pagetable_t kernel_pagetable; // ysw
 #ifdef LAB_NET
 struct mbuf;
 struct sock;

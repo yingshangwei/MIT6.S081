@@ -67,7 +67,7 @@ ls(char *path)
       }
       printf("%s %d %d %d\n", fmtname(buf), st.type, st.ino, st.size);
     }
-    printf("ls while end\n");
+    //printf("ls while end\n");
     break;
   }
   close(fd);

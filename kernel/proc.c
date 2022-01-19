@@ -18,7 +18,7 @@ struct spinlock pid_lock;
 extern void forkret(void);
 static void wakeup1(struct proc *chan);
 static void freeproc(struct proc *p);
-void proc_freekernelpagetable(pagetable_t);
+void proc_freekernelpagetable(pagetable_t,uint64);
 
 extern char trampoline[]; // trampoline.S
 
@@ -95,6 +95,8 @@ allocpid() {
 static struct proc*
 allocproc(void)
 {
+
+  //printf("+++++++++++++++++++++++++allocproc\n");
   struct proc *p;
 
   for(p = proc; p < &proc[NPROC]; p++) {
@@ -127,6 +129,7 @@ found:
   // ysw
   p->kernel_pagetable = new_kernel_pagetable();
   if(p->kernel_pagetable == 0) {
+    printf("alloc kernel_pagetable error\n");
     freeproc(p);
     release(&p->lock);
     return 0;
@@ -138,12 +141,16 @@ found:
   // guard page.
   char *pa = kalloc(); 
   if(pa == 0) {
+    printf("alloc kernel stack error\n");
     freeproc(p);
     release(&p->lock);
     return 0;
   }
-  uint64 va = KSTACK(NPROC-1);
-  mappages(p->kernel_pagetable, va, PGSIZE, (uint64)pa, PTE_R | PTE_W);
+  uint64 va = KSTACK(0);
+  if(mappages(p->kernel_pagetable, va, PGSIZE, (uint64)pa, PTE_R | PTE_W) != 0) 
+  {
+    panic("allocproc mappages");
+  }
   p->kstack = va;
 
 
@@ -167,9 +174,11 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
-  if(p->pagetable) 
-    proc_freekernelpagetable(p->kernel_pagetable);
+  if(p->kernel_pagetable) 
+    proc_freekernelpagetable(p->kernel_pagetable,p->kstack);
   p->pagetable = 0;
+  p->kernel_pagetable = 0;
+  p->kstack = 0; // ysw
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -218,6 +227,7 @@ proc_pagetable(struct proc *p)
 void
 proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
+  //printf("0000000000000000  free pagetable\n");
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
   uvmfree(pagetable, sz);
@@ -225,8 +235,11 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
 
 // ysw
 void
-proc_freekernelpagetable(pagetable_t kernel_pagetable) {
-  uvmunmap(kernel_pagetable,KSTACK(NPROC-1),1,1);
+proc_freekernelpagetable(pagetable_t kernel_pagetable, uint64 kstack) 
+{
+  //printf("11111111111111111  free kernel_pagetable\n");
+  if(kstack) 
+    uvmunmap(kernel_pagetable,kstack,1,1);
   kvmfree(kernel_pagetable);
 }
 
@@ -367,7 +380,7 @@ reparent(struct proc *p)
 void
 exit(int status)
 {
-  printf("exit\n");
+  //printf("----------------------------------exit\n");
   struct proc *p = myproc();
 
   if(p == initproc)
@@ -501,6 +514,7 @@ scheduler(void)
     intr_on();
     
     int found = 0;
+    int cnt = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
@@ -508,10 +522,21 @@ scheduler(void)
         // to release its lock and then reacquire it
         // before jumping back to us.
         p->state = RUNNING;
+
+        // ysw
+        // if(c->proc) {
+        //   c->kernel_pagetable = (uint64)c->proc->kernel_pagetable;
+        // }
+        // else {
+        //   c->kernel_pagetable = 0;
+        // }
+
         c->proc = p;
 
         // ysw
-        kernel_pagetable = p->kernel_pagetable;
+        cnt++;
+        //printf("swtch to proc %d %d %p -addr : %p\n", p-proc, cnt, mycpu(), &cnt);
+        //kernel_pagetable = p->kernel_pagetable;
         w_satp(MAKE_SATP(p->kernel_pagetable));
         sfence_vma();
         swtch(&c->context, &p->context);
@@ -521,9 +546,15 @@ scheduler(void)
         c->proc = 0;
 
         found = 1;
+        //printf("swtch to proc end %d %d\n", p-proc, cnt);
       }
       release(&p->lock);
     }
+    if(found == 0) {
+      //printf("no progress running\n");
+      kvminithart();
+    }
+    
 #if !defined (LAB_FS)
     if(found == 0) {
       intr_on();
@@ -545,9 +576,10 @@ scheduler(void)
 void
 sched(void)
 {
-  printf("sched");
+  //printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!sched\n");
   int intena;
   struct proc *p = myproc();
+  //printf("************************  %p\n", p);
 
   if(!holding(&p->lock))
     panic("sched p->lock");
@@ -558,18 +590,24 @@ sched(void)
   if(intr_get())
     panic("sched interruptible");
 
-  printf("sched1");
+  //printf("sched1\n");
   intena = mycpu()->intena;
 
-  kernel_pagetable = mycpu()->proc->kernel_pagetable; // ysw
-  w_satp(MAKE_SATP(mycpu()->proc->kernel_pagetable));
-  sfence_vma();
-  printf("sched2");
+  //kernel_pagetable = mycpu()->proc->kernel_pagetable; // ysw
+
+  // if(mycpu()->proc) {
+  //   w_satp(MAKE_SATP((pagetable_t)(mycpu()->proc->kernel_pagetable)));
+  //   sfence_vma();
+  // } else {
+  //   kvminithart();
+  // }
+  kvminithart();
   
+  //printf("sched2\n");
   swtch(&p->context, &mycpu()->context);
-  printf("sched3");
+  //printf("sched3\n");
   mycpu()->intena = intena;
-  printf("sched4");
+  //printf("sched4\n");
 }
 
 // Give up the CPU for one scheduling round.
@@ -579,6 +617,7 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+  //printf("yield\n");
   sched();
   release(&p->lock);
 }
