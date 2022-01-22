@@ -183,6 +183,7 @@ int             copyinstr(pagetable_t, char *, uint64, uint64);
 void            vmprint(pagetable_t pagetable);        // ysw
 pagetable_t     new_kernel_pagetable();                // ysw
 void            kvmfree(pagetable_t kernel_pagetable); // ysw 
+pagetable_t     get_kernel_pagetable();                // ysw
 
 // plic.c
 void            plicinit(void);

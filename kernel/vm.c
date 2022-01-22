@@ -21,6 +21,9 @@ extern char trampoline[]; // trampoline.S
 void
 kvminit()
 {
+  if(kernel_pagetable != 0) {
+    panic("test error");
+  }
   kernel_pagetable = (pagetable_t) kalloc();
   memset(kernel_pagetable, 0, PGSIZE);
 
@@ -45,6 +48,16 @@ kvminit()
   // map the trampoline for trap entry/exit to
   // the highest virtual address in the kernel.
   kvmmap(TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+
+  // char *pa = kalloc(); 
+  // if(pa == 0) {
+  //   panic("kernel init: alloc error");
+  // }
+  // uint64 va = KSTACK(0);
+  // if(mappages(kernel_pagetable, va, PGSIZE, (uint64)pa, PTE_R | PTE_W) != 0) 
+  // {
+  //   panic("kernel init: allocproc mappages");
+  // }
 }
 
 // Switch h/w page table register to the kernel's page table,
@@ -132,12 +145,15 @@ kvmpa(uint64 va)
   pte_t *pte;
   uint64 pa;
   
+  //printf("call kvmpa  %p %p %p\n", myproc(), kernel_pagetable, myproc_pagetable());
   pte = walk(myproc_pagetable(), va, 0);
+  //printf("ok\n");
   if(pte == 0)
     panic("kvmpa");
   if((*pte & PTE_V) == 0)
     panic("kvmpa");
   pa = PTE2PA(*pte);
+  //printf("call kvmpa va=%p pa=%p\n", va, pa);
   return pa+off;
 }
 
@@ -531,4 +547,10 @@ kvmfree(pagetable_t kernel_pagetable)
   uvmunmap(kernel_pagetable, PGROUNDDOWN((uint64)etext), TONPAGES((uint64)etext,PHYSTOP-(uint64)etext), 0);
   uvmunmap(kernel_pagetable, PGROUNDDOWN(TRAMPOLINE), TONPAGES(TRAMPOLINE,PGSIZE), 0);
   freewalk(kernel_pagetable);
+}
+
+// ysw
+pagetable_t
+get_kernel_pagetable() {
+  return kernel_pagetable;
 }

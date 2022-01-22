@@ -78,5 +78,10 @@ kalloc(void)
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
+  
+  //int cnt = 0;
+  //for(struct run *ppp = kmem.freelist;ppp;ppp=ppp->next,cnt++);
+  //printf("mem leaved %d\n", cnt);
+
   return (void*)r;
 }

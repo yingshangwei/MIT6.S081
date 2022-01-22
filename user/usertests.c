@@ -959,10 +959,17 @@ reparent2(char *s)
       exit(1);
     }
     if(pid1 == 0){
-      fork();
-      fork();
+      int id;
+      id = fork();
+      //printf("fork1 %d ok\n", id);
+      id = fork();
+      if(id) {
+        id = 0;
+      }
+      //printf("fork2 %d ok\n", id);
       exit(0);
     }
+    //printf("wait i %d\n", i);
     wait(0);
   }
 
